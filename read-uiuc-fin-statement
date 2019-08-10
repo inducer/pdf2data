@@ -1,0 +1,329 @@
+#! /usr/bin/env python3
+
+
+import itertools
+import re
+import sqlite3
+
+from pdfminer.pdfparser import PDFParser
+from pdfminer.pdfdocument import PDFDocument
+from pdfminer.layout import LAParams
+
+from pdf2data.pdf import (
+        PageIterator,
+        find_attr_group_matching, GroupNotFound,
+        get_attr_lookup,
+        find_lines_with,
+        find_row_table, find_col_table)
+from pdf2data.data import set_up_table, row_to_db
+
+
+def verify_that_fonts_are_known(lines):
+    for line in lines:
+        assert (
+                "ArialMT" in line.fontname
+                or "Arial-BoldMT" in line.fontname
+                or line.fontname == "Arial"
+                or line.fontname == "Arial Bold"
+                ), line.fontname
+
+
+# {{{ transactions
+
+class EmptyTransactionPage(RuntimeError):
+    pass
+
+
+TRANSACTIONS_DATE_RE = re.compile("^([0-9]{2})-([A-Z]{3})-([0-9]{4})$")
+MONTHS = "JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC".split()
+assert len(MONTHS) == 12
+
+
+def convert_transactions_date(s):
+    date_match = TRANSACTIONS_DATE_RE.match(s)
+    assert date_match is not None
+
+    import datetime
+    date = datetime.date(
+            day=int(date_match.group(1)),
+            month=1+MONTHS.index(date_match.group(2)),
+            year=int(date_match.group(3)))
+
+    return date.isoformat()
+
+
+def convert_number(s):
+    return float(s.replace(",", ""))
+
+
+def get_transactions_page_account(lines, db_cursor):
+    try:
+        metadata_top_y0 = find_attr_group_matching(
+                ["Chart", "Level", "Fund Term Dt"],
+                "y0", lines)
+    except GroupNotFound:
+        try:
+            find_attr_group_matching(["Chart"], "y0", lines)
+        except GroupNotFound:
+            raise EmptyTransactionPage()
+
+    metadata_bottom_y0 = find_attr_group_matching(
+            ["Sponsor", "Budget End Date"],
+            "y0", lines)
+
+    metadata_lines = [
+            l for l in lines if metadata_bottom_y0 <= l.y0 <= metadata_top_y0]
+
+    metadata_xlookup = get_attr_lookup(metadata_lines, "x0")
+    metadata_x0s = sorted(metadata_xlookup)
+    cfop_lines = list(itertools.chain.from_iterable(
+            metadata_xlookup[x0] for x0 in metadata_x0s[1:3]))
+    cfop_headers = metadata_xlookup[metadata_x0s[0]]
+
+    cfop_data, cfop_descr = find_col_table(cfop_headers, cfop_lines)
+    cfop_data.update(
+            {key+"_descr": value for key, value in cfop_descr.items()})
+
+    return row_to_db(
+            db_cursor, "account",
+            {k: v.text for k, v in cfop_data.items()},
+            upsert_unique_cols=(
+                "chart", "organization",
+                "fund", "program"))
+
+
+def get_transactions_fy_period(lines):
+    (_, fy_period_match), = find_lines_with(
+            r"FY ([0-9]{2,4})\s+Period ([0-9]{1,2})", lines)
+    fy = int(fy_period_match.group(1))
+    if fy < 100:
+        # FIXME: 2k1 (!)
+        fy = fy + 2000
+
+    period = int(fy_period_match.group(2))
+
+    return fy, period
+
+
+def read_transactions(lines):
+    trans_top_y0 = find_attr_group_matching(
+            ["Account", "Description", "Date", "RC"], "y0", lines)
+
+    trans_bottom_y0 = find_attr_group_matching(
+            ["Printed: [0-9]{2}-[A-Z]+-[0-9]{4} [0-9]{2}"],
+            "y0", lines)
+
+    trans_lines = [l for l in lines if trans_bottom_y0 < l.y0 < trans_top_y0]
+    trans_headers = [l for l in lines if l.y0 == trans_top_y0]
+
+    return find_row_table(trans_headers, trans_lines)
+
+
+def is_bogus_transaction_row(row):
+    # ignore odd misaligned lines with little information
+    return (
+            len(row) == 1 and "Seq" in row)
+
+
+def read_transactions_pages(page_it, db_cursor):
+    try:
+        account_id = get_transactions_page_account(page_it.lines, db_cursor)
+    except EmptyTransactionPage:
+        page_it.advance()
+        return
+
+    fy, period = get_transactions_fy_period(page_it.lines)
+
+    trans_rows = []
+
+    while True:
+        verify_that_fonts_are_known(page_it.lines)
+        page_trans_rows = read_transactions(page_it.lines)
+        trans_rows.extend(page_trans_rows)
+
+        end_of_transactions = False
+        for row in page_trans_rows:
+            if is_bogus_transaction_row(row):
+                continue
+
+            if (
+                    "Bold" in row["Account"].fontname
+                    and row["Account"].text == "Net Totals"):
+                end_of_transactions = True
+
+        page_it.advance()
+
+        if end_of_transactions:
+            break
+
+    # {{{ add descriptions from subtotal lines
+
+    new_trans_rows = []
+    row_batch = []
+
+    for row in trans_rows:
+        if is_bogus_transaction_row(row):
+            continue
+
+        if "Description" not in row:
+            # ignore (computed) total lines
+            assert (
+                    row["Account"].text.startswith("Total")
+                    or row["Account"].text.startswith("Net Totals"))
+
+            assert "Bold" in row["Account"].fontname
+            continue
+
+        if "Bold" in row["Account"].fontname:
+            acct_nr = row["Account"].text
+            for batch_row in row_batch:
+                assert batch_row["Account"] == acct_nr
+                batch_row["Account Descr"] = row["Description"].text
+
+            new_trans_rows.extend(row_batch)
+            del row_batch[:]
+
+        else:
+            row = {k: v.text for k, v in row.items()}
+            row["in_account_id"] = account_id
+            row["fy"] = fy
+            row["period"] = period
+            row_batch.append(row)
+
+    assert not row_batch
+
+    trans_rows = new_trans_rows
+    del new_trans_rows
+
+    # }}}
+
+    for row in trans_rows:
+        row_to_db(
+                db_cursor, "trans", row,
+                col_name_mapping={
+                    "Encumbrances": "encumbrance",
+                    "Document #": "document_nr",
+                    "Document": "document_nr",
+                    "Deposit #": "deposit_nr",
+                    "Description": "descr",
+                    "Order Code": "purchase_order_code",
+                    },
+                value_converters={
+                    "Date": convert_transactions_date,
+                    "Budget": convert_number,
+                    "Actual": convert_number,
+                    "Encumbrances": convert_number,
+                    })
+
+# }}}
+
+
+# {{{ payroll
+
+def read_payroll_page(page_it, db_cursor):
+    page_it.advance()
+
+# }}}
+
+
+# {{{ top level
+
+def read_statement(pdf_fileobj, db, start_page):
+    set_up_table(
+            db, "account", (
+                ("chart", "text"),
+                ("chart_descr", "text"),
+                ("organization", "text"),
+                ("organization_descr", "text"),
+                ("fund", "text"),
+                ("fund_descr", "text"),
+                ("program", "text"),
+                ("program_descr", "text"),
+                ("fund_type", "text"),
+                ("fund_type_descr", "text"),
+                ("sponsor", "text"),
+                ("sponsor_descr", "text"),
+                ))
+
+    set_up_table(
+            db, "trans", (
+                ("fy", "num"),
+                ("period", "num"),
+                ("in_account_id", "num"),
+
+                ("account", "text"),
+                ("account_descr", "text"),
+                ("descr", "text"),
+                ("date", "text"),
+                ("rc", "text"),
+                ("document_nr", "text"),
+                ("seq", "num"),
+                ("purchase_order_code", "text"),
+                ("doc_ref", "text"),
+                ("deposit_nr", "num"),
+                ("budget", "num"),
+                ("actual", "num"),
+                ("encumbrance", "num"),
+                ("activity", "text"),
+                ("location", "text"),
+            ))
+
+    document = PDFDocument(PDFParser(pdf_fileobj), None)
+
+    page_it = PageIterator(document, LAParams(char_margin=0.2))
+
+    if start_page is not None:
+        while page_it.i_page < start_page:
+            page_it.advance()
+
+    while not page_it.is_at_end:
+        print(f"page {page_it.i_page}")
+
+        if (
+                find_lines_with(
+                    "FIOL Revenue/Expense/Transfer Transactions",
+                    page_it.lines)
+                or
+                find_lines_with(
+                    "FIGL_Operating_Ledger_Transaction_Statement",
+                    page_it.lines)
+                ):
+
+            read_transactions_pages(page_it, db.cursor())
+        elif (
+                find_lines_with(
+                    "HPAY Payroll Expense by Person Month End", page_it.lines)
+                or
+                find_lines_with(
+                    "FIPR_Payroll_Labor_Distribution_Month_End", page_it.lines)
+                or
+                find_lines_with(
+                    "FIPR_Payroll_Expense_by_Person_Month_End", page_it.lines)
+                ):
+            read_payroll_page(page_it, db.cursor())
+        else:
+            raise ValueError(f"unexpected page type: {page_it.i_page}")
+
+
+def main():
+    from argparse import ArgumentParser
+    parser = ArgumentParser()
+    parser.add_argument("statement_pdf", metavar="FILENAME.PDF")
+    parser.add_argument(
+            "--database", metavar="FILENAME.SQLITE3",
+            default="statements.sqlite3")
+    parser.add_argument(
+            "--start-page", metavar="PAGENO", type=int)
+    args = parser.parse_args()
+
+    with open(args.statement_pdf, 'rb') as pdf_fileobj:
+        with sqlite3.connect(args.database) as db:
+            read_statement(pdf_fileobj, db, args.start_page)
+
+# }}}
+
+
+if __name__ == "__main__":
+    main()
+
+# vim: foldmethod=marker

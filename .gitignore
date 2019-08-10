@@ -1,0 +1,6 @@
+*~
+.*.sw[op]
+*.sqlite3
+
+__pycache__
+*.egg-info
