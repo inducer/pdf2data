@@ -10,7 +10,7 @@ from pdf2data.pdf import (
 
 
 # schools.pdf data set from
-# https://github.com/tabulapdf/tabula-java/blob/master/src/test/resources/technology/tabula/schools.pdf
+# https://github.com/tabulapdf/tabula-java/blob/9960775528f6ff09dcb41830ea48eb89a73f3b49/src/test/resources/technology/tabula/schools.pdf
 
 def main():
     with open("schools.pdf", "rb") as pdf_fileobj:
