@@ -8,10 +8,12 @@ esteemed place of current employment, which looks roughly like this:
 
 `Tabula <https://tabula.technology/>`__ not plausible for the volume of
 information you're needing to extract? (Thousands of pages in my case.) This
-package may be what you're looking for. I should note that Tabula this is
-a simple tool aimed at very structured data.  Tabula handle *far* messsier
+package may be what you're looking for. I should note that this is
+a simple tool aimed at very structured data.  Tabula can handle *far* messsier
 situations than this package. Misaligned cell heights?  Word-wrapped cells?
-You're better off with Tabula.
+Spanning cells?  You're better off with Tabula. Copmuter-generated report
+PDFs that urgently want to be in a SQLite database? You've come to the right
+place.
 
 This package builds on `pdfminer <https://github.com/pdfminer/pdfminer.six>`__ to make it
 easy to absorb computer-generated tabular data in PDF form and produce JSON-like lists of
@@ -60,3 +62,7 @@ https://github.com/inducer/pdf2data
 Copyright 2019 Andreas Kloeckner
 
 Released under the MIT License
+
+In terms of support, if this doesn't do what you need, you're likely to be on
+your own. I'm happy to take patches, but I'm unlikely to have to time to fix
+your use case.
