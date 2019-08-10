@@ -11,7 +11,7 @@ information you're needing to extract? (Thousands of pages in my case.) This
 package may be what you're looking for. I should note that this is
 a simple tool aimed at very structured data.  Tabula can handle *far* messsier
 situations than this package. Misaligned cell heights?  Word-wrapped cells?
-Spanning cells?  You're better off with Tabula. Copmuter-generated report
+Spanning cells?  You're better off with Tabula. Computer-generated report
 PDFs that urgently want to be in a SQLite database? You've come to the right
 place.
 
