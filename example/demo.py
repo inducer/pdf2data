@@ -19,20 +19,18 @@ def main():
         page_it = PageIterator(document, LAParams(char_margin=0.2))
 
         while not page_it.is_at_end:
-            # identify top and bottom of table
-            trans_top_y0 = find_attr_group_matching(
-                    ["Last Name", "First Name"],
-                    "y0", page_it.lines)
+            # identify top of table
+            top_y0 = find_attr_group_matching(
+                    ["Last Name", "First Name"], "y0", page_it.lines)
 
             # extract text snippets making up table body
-            trans_lines = [l for l in page_it.lines if l.y0 < trans_top_y0]
+            table_lines = [l for l in page_it.lines if l.y0 < top_y0]
 
             # extract header text snippets
-            trans_headers = [
-                    l for l in page_it.lines if abs(l.y0 - trans_top_y0) < 5]
+            headers = [l for l in page_it.lines if abs(l.y0 - top_y0) < 5]
 
             # extract table
-            rows = find_row_table(trans_headers, trans_lines)
+            rows = find_row_table(headers, table_lines)
             rows = merge_overlapping_rows(rows, "y0", "y1")
 
             for row in rows:
