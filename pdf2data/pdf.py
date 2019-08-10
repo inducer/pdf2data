@@ -144,6 +144,12 @@ class TextLine:
     def __repr__(self):
         return f"TL({repr(str(self))})"
 
+    def copy(self, text=None):
+        return type(self)(
+                text=(text if text is not None else self.text),
+                fontname=self.fontname,
+                bbox=(self.x0, self.y0, self.x1, self.y1))
+
 
 def gather_text(item, lines=None):
     """

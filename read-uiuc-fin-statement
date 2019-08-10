@@ -28,11 +28,32 @@ def verify_that_fonts_are_known(lines):
                 ), line.fontname
 
 
-# {{{ transactions
+# {{{ shared infrastructure
 
-class EmptyTransactionPage(RuntimeError):
+class EmptyDataPage(RuntimeError):
     pass
 
+
+def get_fy_period(lines):
+    (_, fy_period_match), = find_lines_with(
+            r"FY ([0-9]{2,4})\s+Period ([0-9]{1,2})", lines)
+    fy = int(fy_period_match.group(1))
+    if fy < 100:
+        # FIXME: 2k1 (!)
+        fy = fy + 2000
+
+    period = int(fy_period_match.group(2))
+
+    return fy, period
+
+
+def convert_number(s):
+    return float(s.replace(",", ""))
+
+# }}}
+
+
+# {{{ transactions
 
 TRANSACTIONS_DATE_RE = re.compile("^([0-9]{2})-([A-Z]{3})-([0-9]{4})$")
 MONTHS = "JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC".split()
@@ -52,10 +73,6 @@ def convert_transactions_date(s):
     return date.isoformat()
 
 
-def convert_number(s):
-    return float(s.replace(",", ""))
-
-
 def get_transactions_page_account(lines, db_cursor):
     try:
         metadata_top_y0 = find_attr_group_matching(
@@ -65,7 +82,7 @@ def get_transactions_page_account(lines, db_cursor):
         try:
             find_attr_group_matching(["Chart"], "y0", lines)
         except GroupNotFound:
-            raise EmptyTransactionPage()
+            raise EmptyDataPage()
 
     metadata_bottom_y0 = find_attr_group_matching(
             ["Sponsor", "Budget End Date"],
@@ -92,19 +109,6 @@ def get_transactions_page_account(lines, db_cursor):
                 "fund", "program"))
 
 
-def get_transactions_fy_period(lines):
-    (_, fy_period_match), = find_lines_with(
-            r"FY ([0-9]{2,4})\s+Period ([0-9]{1,2})", lines)
-    fy = int(fy_period_match.group(1))
-    if fy < 100:
-        # FIXME: 2k1 (!)
-        fy = fy + 2000
-
-    period = int(fy_period_match.group(2))
-
-    return fy, period
-
-
 def read_transactions(lines):
     trans_top_y0 = find_attr_group_matching(
             ["Account", "Description", "Date", "RC"], "y0", lines)
@@ -128,11 +132,11 @@ def is_bogus_transaction_row(row):
 def read_transactions_pages(page_it, db_cursor):
     try:
         account_id = get_transactions_page_account(page_it.lines, db_cursor)
-    except EmptyTransactionPage:
+    except EmptyDataPage:
         page_it.advance()
         return
 
-    fy, period = get_transactions_fy_period(page_it.lines)
+    fy, period = get_fy_period(page_it.lines)
 
     trans_rows = []
 
@@ -220,9 +224,152 @@ def read_transactions_pages(page_it, db_cursor):
 
 # {{{ payroll
 
-def read_payroll_page(page_it, db_cursor):
-    page_it.advance()
+def get_payroll_page_account(lines, db_cursor):
+    try:
+        metadata_top_y0 = find_attr_group_matching(
+                ["Chart", "Principal Investigator", "Grant Code"],
+                "y0", lines)
+    except GroupNotFound:
+        try:
+            find_attr_group_matching(["Chart"], "y0", lines)
+        except GroupNotFound:
+            raise EmptyDataPage()
 
+    metadata_bottom_y0 = find_attr_group_matching(
+            ["Account", "Name", "UIN"],
+            "y0", lines)
+
+    metadata_lines = [
+            l for l in lines
+            if metadata_bottom_y0 + 5 <= l.y0 <= metadata_top_y0]
+
+    metadata_xlookup = get_attr_lookup(metadata_lines, "x0")
+    metadata_x0s = sorted(metadata_xlookup)
+    cfop_lines = list(itertools.chain.from_iterable(
+            metadata_xlookup[x0] for x0 in metadata_x0s[1:3]))
+    cfop_headers = metadata_xlookup[metadata_x0s[0]]
+
+    cfop_data, cfop_descr = find_col_table(cfop_headers, cfop_lines)
+    cfop_data.update(
+            {key+"_descr": value for key, value in cfop_descr.items()})
+
+    return row_to_db(
+            db_cursor, "account",
+            {k: v.text for k, v in cfop_data.items()},
+            upsert_unique_cols=(
+                "chart", "organization",
+                "fund", "program"))
+
+
+def read_payroll_rows(lines):
+    proll_top_y0 = find_attr_group_matching(
+            ["Suff", "Cat", "Seq", "Rate"], "y0", lines)
+
+    proll_lines = [l for l in lines if l.y0 < proll_top_y0]
+    proll_header_y0 = find_attr_group_matching(
+            ["Account", "UIN", "EC", "Posn"], "y0", lines)
+    trans_headers = sorted(
+            [l for l in lines if l.y0 == proll_header_y0],
+            key=lambda l: l.x0)
+
+    pp1, pp2, pp3 = [
+            i
+            for i, h in enumerate(trans_headers)
+            if h.text == "PayPeriod"]
+
+    trans_headers[pp1] = trans_headers[pp1].copy("Pay Period Code")
+    trans_headers[pp2] = trans_headers[pp2].copy("Pay Period Begin")
+    trans_headers[pp3] = trans_headers[pp3].copy("Pay Period End")
+
+    return find_row_table(trans_headers, proll_lines)
+
+
+def read_payroll_pages(page_it, db_cursor):
+    try:
+        account_id = get_payroll_page_account(page_it.lines, db_cursor)
+    except EmptyDataPage:
+        page_it.advance()
+        return
+
+    fy, period = get_fy_period(page_it.lines)
+
+    proll_rows = []
+
+    while True:
+        verify_that_fonts_are_known(page_it.lines)
+        page_proll_rows = read_payroll_rows(page_it.lines)
+
+        proll_rows.extend(page_proll_rows)
+
+        end_of_transactions = False
+        for row in page_proll_rows:
+            if (
+                    "Bold" in row["Name"].fontname
+                    and row["Name"].text == "Total Personnel Expense"):
+                end_of_transactions = True
+
+        page_it.advance()
+
+        if end_of_transactions:
+            break
+
+    # {{{ add descriptions from subtotal lines
+
+    new_proll_rows = []
+    row_batch = []
+
+    for row in proll_rows:
+        if "Account" not in row:
+            # ignore (computed) total lines
+            assert row["Name"].text.startswith("Total")
+
+            assert "Bold" in row["Name"].fontname
+            continue
+
+        if "Bold" in row["Account"].fontname:
+            acct_nr = row["Account"].text
+            for batch_row in row_batch:
+                assert batch_row["Account"] == acct_nr
+                batch_row["Account Descr"] = row["Name"].text
+
+            new_proll_rows.extend(row_batch)
+            del row_batch[:]
+
+        else:
+            row = {k: v.text for k, v in row.items()}
+            row["in_account_id"] = account_id
+            row["fy"] = fy
+            row["period"] = period
+            row_batch.append(row)
+
+    assert not row_batch
+
+    proll_rows = new_proll_rows
+    del new_proll_rows
+
+    # }}}
+
+    for row in proll_rows:
+        print(row)
+
+    1/0
+    for row in proll_rows:
+        row_to_db(
+                db_cursor, "trans", row,
+                col_name_mapping={
+                    "Encumbrances": "encumbrance",
+                    "Document #": "document_nr",
+                    "Document": "document_nr",
+                    "Deposit #": "deposit_nr",
+                    "Description": "descr",
+                    "Order Code": "purchase_order_code",
+                    },
+                value_converters={
+                    "Date": convert_transactions_date,
+                    "Budget": convert_number,
+                    "Actual": convert_number,
+                    "Encumbrances": convert_number,
+                    })
 # }}}
 
 
@@ -300,7 +447,7 @@ def read_statement(pdf_fileobj, db, start_page):
                 find_lines_with(
                     "FIPR_Payroll_Expense_by_Person_Month_End", page_it.lines)
                 ):
-            read_payroll_page(page_it, db.cursor())
+            read_payroll_pages(page_it, db.cursor())
         else:
             raise ValueError(f"unexpected page type: {page_it.i_page}")
 
