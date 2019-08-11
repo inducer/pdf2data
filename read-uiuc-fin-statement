@@ -224,6 +224,22 @@ def read_transactions_pages(page_it, db_cursor):
 
 # {{{ payroll
 
+PAYROLL_DATE_RE = re.compile("^([0-9]{2})/([0-9]{2})/([0-9]{4})$")
+
+
+def convert_payroll_date(s):
+    date_match = PAYROLL_DATE_RE.match(s)
+    assert date_match is not None
+
+    import datetime
+    date = datetime.date(
+            day=int(date_match.group(2)),
+            month=int(date_match.group(1)),
+            year=int(date_match.group(3)))
+
+    return date.isoformat()
+
+
 def get_payroll_page_account(lines, db_cursor):
     try:
         metadata_top_y0 = find_attr_group_matching(
@@ -281,7 +297,23 @@ def read_payroll_rows(lines):
     trans_headers[pp2] = trans_headers[pp2].copy("Pay Period Begin")
     trans_headers[pp3] = trans_headers[pp3].copy("Pay Period End")
 
-    return find_row_table(trans_headers, proll_lines)
+    pp1, pp2 = [
+            i
+            for i, h in enumerate(trans_headers)
+            if h.text == "Posn"]
+
+    trans_headers[pp1] = trans_headers[pp1].copy("Posn")
+    trans_headers[pp2] = trans_headers[pp2].copy("Posn Suff")
+
+    pp1, pp2 = [
+            i
+            for i, h in enumerate(trans_headers)
+            if h.text == "Pay"]
+
+    trans_headers[pp1] = trans_headers[pp1].copy("Pay Cat")
+    trans_headers[pp2] = trans_headers[pp2].copy("Pay Seq")
+
+    return find_row_table(trans_headers, proll_lines, heading_bias="min")
 
 
 def read_payroll_pages(page_it, db_cursor):
@@ -350,32 +382,26 @@ def read_payroll_pages(page_it, db_cursor):
     # }}}
 
     for row in proll_rows:
-        print(row)
-
-    1/0
-    for row in proll_rows:
         row_to_db(
-                db_cursor, "trans", row,
+                db_cursor, "payroll", row,
                 col_name_mapping={
-                    "Encumbrances": "encumbrance",
-                    "Document #": "document_nr",
-                    "Document": "document_nr",
-                    "Deposit #": "deposit_nr",
-                    "Description": "descr",
-                    "Order Code": "purchase_order_code",
+                    "Doc Num": "document_nr",
+                    "Fringe": "fringe_rate",
                     },
                 value_converters={
-                    "Date": convert_transactions_date,
-                    "Budget": convert_number,
-                    "Actual": convert_number,
-                    "Encumbrances": convert_number,
+                    "Pay Period Begin": convert_payroll_date,
+                    "Pay Period End": convert_payroll_date,
+                    "Amount": convert_number,
+                    "Hours": convert_number,
+                    "FTE": convert_number,
+                    "Fringe": convert_number,
                     })
 # }}}
 
 
 # {{{ top level
 
-def read_statement(pdf_fileobj, db, start_page):
+def read_statement(pdf_fileobj, db, *, start_page=None, end_page=None):
     set_up_table(
             db, "account", (
                 ("chart", "text"),
@@ -415,6 +441,33 @@ def read_statement(pdf_fileobj, db, start_page):
                 ("location", "text"),
             ))
 
+    set_up_table(
+            db, "payroll", (
+                ("fy", "num"),
+                ("period", "num"),
+                ("in_account_id", "num"),
+
+                ("account", "text"),
+                ("account_descr", "text"),
+                ("name", "text"),
+                ("uin", "text"),
+                ("ec", "text"),
+                ("posn", "text"),
+                ("posn_suff", "text"),
+                ("pay_cat", "text"),
+                ("pay_seq", "text"),
+                ("fte", "num"),
+                ("pay_period_code", "text"),
+                ("pay_period_begin", "text"),
+                ("pay_period_end", "text"),
+                ("hours", "num"),
+                ("fringe_rate", "num"),
+                ("amount", "num"),
+                ("document_nr", "text"),
+                ("activity", "text"),
+                ("location", "text"),
+                ))
+
     document = PDFDocument(PDFParser(pdf_fileobj), None)
 
     page_it = PageIterator(document, LAParams(char_margin=0.2))
@@ -424,6 +477,9 @@ def read_statement(pdf_fileobj, db, start_page):
             page_it.advance()
 
     while not page_it.is_at_end:
+        if end_page is not None and page_it.i_page >= end_page:
+            break
+
         print(f"page {page_it.i_page}")
 
         if (
@@ -461,11 +517,15 @@ def main():
             default="statements.sqlite3")
     parser.add_argument(
             "--start-page", metavar="PAGENO", type=int)
+    parser.add_argument(
+            "--end-page", metavar="PAGENO", type=int)
     args = parser.parse_args()
 
     with open(args.statement_pdf, 'rb') as pdf_fileobj:
         with sqlite3.connect(args.database) as db:
-            read_statement(pdf_fileobj, db, args.start_page)
+            read_statement(
+                    pdf_fileobj, db,
+                    start_page=args.start_page, end_page=args.end_page)
 
 # }}}
 

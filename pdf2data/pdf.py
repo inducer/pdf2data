@@ -335,7 +335,7 @@ def merge_overlapping_rows(rows, row_min_attr_name, row_max_attr_name):
 def find_table(
         headers, lines, row_min_attr_name, row_max_attr_name,
         col_min_attr_name, col_max_attr_name,
-        reverse_sort):
+        reverse_sort, heading_bias="centered"):
     headers = sorted(headers, key=lambda l: getattr(l, col_min_attr_name))
     row_lookup = get_attr_lookup(lines, row_min_attr_name)
 
@@ -364,19 +364,33 @@ def find_table(
 
             if len(possible_headers) == 0:
                 # no overlap at all, typically a very short entry
-                # fall back to minimum center distance
-                _, h = min(
-                        (abs(
-                            0.5*(
-                                getattr(h, col_min_attr_name)
-                                + getattr(h, col_max_attr_name))
-                            - lctr), h)
-                        for h in headers)
-                row[h.text] = l
+
+                if heading_bias == "centered":
+                    # fall back to minimum center distance
+                    _, h = min(
+                            (abs(
+                                0.5*(
+                                    getattr(h, col_min_attr_name)
+                                    + getattr(h, col_max_attr_name))
+                                - lctr), h)
+                            for h in headers)
+                    key = h.text
+
+                elif heading_bias == "min":
+                    # Use next-nearest left overlapping header
+
+                    _, h = max(
+                            (getattr(h, col_min_attr_name), h)
+                            for h in headers
+                            if getattr(h, col_min_attr_name) <= lmin)
+                    key = h.text
+
+                else:
+                    raise ValueError("unrecognized heading bias")
 
             elif len(possible_headers) == 1:
                 (_, h), = possible_headers
-                row[h.text] = l
+                key = h.text
 
             elif len(possible_headers) > 1:
                 # Use left/topmost overlapping header
@@ -384,7 +398,12 @@ def find_table(
                 _, h = min(
                         (getattr(h, col_min_attr_name), h)
                         for ovl, h in possible_headers)
-                row[h.text] = l
+                key = h.text
+
+            if key in row:
+                raise ValueError(f"duplicate assignment of key '{key}'")
+            else:
+                row[key] = l
 
     return rows
 
