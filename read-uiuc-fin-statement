@@ -14,7 +14,8 @@ from pdf2data.pdf import (
         find_attr_group_matching, GroupNotFound,
         get_attr_lookup,
         find_lines_with,
-        find_row_table, find_col_table)
+        find_row_table, find_col_table,
+        merge_overlapping_rows)
 from pdf2data.data import set_up_table, row_to_db
 
 
@@ -35,16 +36,27 @@ class EmptyDataPage(RuntimeError):
 
 
 def get_fy_period(lines):
-    (_, fy_period_match), = find_lines_with(
+    fy_period_matches = find_lines_with(
             r"FY ([0-9]{2,4})\s+Period ([0-9]{1,2})", lines)
-    fy = int(fy_period_match.group(1))
-    if fy < 100:
-        # FIXME: 2k1 (!)
-        fy = fy + 2000
 
-    period = int(fy_period_match.group(2))
+    if fy_period_matches:
+        (_, fy_period_match), = fy_period_matches
+        fy = int(fy_period_match.group(1))
+        if fy < 100:
+            # FIXME: 2k1 (!)
+            fy = fy + 2000
 
-    return fy, period
+        period = int(fy_period_match.group(2))
+
+        return fy, period
+
+    else:
+        fy_matches = find_lines_with(
+                r"Fiscal Year:\s+([0-9]{4})\s+Start", lines)
+        (_, fy_match), = fy_matches
+        print("    no period found")
+
+        return int(fy_match.group(1)), None
 
 
 def convert_number(s):
@@ -118,7 +130,9 @@ def read_transactions(lines):
             "y0", lines)
 
     trans_lines = [l for l in lines if trans_bottom_y0 < l.y0 < trans_top_y0]
-    trans_headers = [l for l in lines if l.y0 == trans_top_y0]
+    trans_headers = [l for l in lines if abs(l.y0 - trans_top_y0) < 4]
+    # handle wrapped, offset header line "Purchase\nOrder Code"
+    trans_headers = [l for l in trans_headers if l.text != "Purchase"]
 
     return find_row_table(trans_headers, trans_lines)
 
@@ -126,7 +140,11 @@ def read_transactions(lines):
 def is_bogus_transaction_row(row):
     # ignore odd misaligned lines with little information
     return (
-            len(row) == 1 and "Seq" in row)
+            (len(row) == 1 and "Seq" in row)
+            or
+            # handle wrapped, offset header line "Purchase\nOrder Code"
+            (len(row) == 1 and "Purchase" in row
+                and row["Purchase"].text == "Order Code"))
 
 
 def read_transactions_pages(page_it, db_cursor):
@@ -330,6 +348,8 @@ def read_payroll_pages(page_it, db_cursor):
     while True:
         verify_that_fonts_are_known(page_it.lines)
         page_proll_rows = read_payroll_rows(page_it.lines)
+        page_proll_rows = merge_overlapping_rows(
+                page_proll_rows, "y0", "y1")
 
         proll_rows.extend(page_proll_rows)
 
