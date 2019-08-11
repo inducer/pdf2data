@@ -16,7 +16,7 @@ PDFs that urgently want to be in a SQLite database? You've come to the right
 place.
 
 If you came here looking to read financial statements at UIUC, there's a page
-[just for you](reading-uiuc-financial-statements.md).
+`just for you <reading-uiuc-financial-statements.md>`__.
 
 This package builds on `pdfminer <https://github.com/pdfminer/pdfminer.six>`__ to make it
 easy to absorb computer-generated tabular data in PDF form and produce JSON-like lists of
