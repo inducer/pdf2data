@@ -35,25 +35,86 @@ or make no modifications. (Yay transactions.)
 
 Here are some queries I've found useful:
 
-*   `select * from account;`
+*   ```sql
+    select * from account;
+    ```
 
     What accounts do I have?
 
-*   `select sum(actual) from trans where in_account_id=2;`
+*   ```sql
+    select sum(actual) from trans where in_account_id=2;
+    ```
 
     How much money have I spent on my startup/ICR account? (`2` is the account ID of my
-    start-up account.)
+    startup account.)
 
-*   `select sum(actual) from trans where in_account_id=3 and descr like '%Revenue%';`
+*   ```sql
+    select sum(actual) from trans where in_account_id=3 and descr like '%Revenue%';
+    ```
 
     How much money has arrived from a funding agency? (3 is an NSF grant account for me)
 
-*   `select name, sum(amount) from payroll where in_account_id=2 group by name order by name;`
+*   ```sql
+    select name, sum(amount) from payroll where in_account_id=2 group by name order by name;
+    ```
 
-    Who has been payed how much out of account X?
+    Who has been paid how much out of account X?
 
-*   `select name, account_descr, sum(amount) from payroll where in_account_id=3 group by name, account_descr order by name, account_descr;`
+*   ```sql
+    select name, account_descr, sum(amount)
+    from payroll where in_account_id=3
+    group by name, account_descr
+    order by name, account_descr;
+    ```
 
-    Who has been payed how much out of account X, broken down by salary,
-    benefits, etc.
+    Who has been paid how much out of account X?
+    (broken down by salary, benefits, etc.)
 
+*   ```sql
+    select fund_descr, account_descr, sum(amount)
+    from payroll inner join account on payroll.in_account_id = account.id where name like '%Lastname%'
+    group by fund_descr, account_descr
+    order by fund_descr, account_descr
+    ;
+    ```
+
+    Out of which accounts (and how much) has RA `Lastname` ever been paid?
+    (broken down by salary, benefits)
+
+*   ```sql
+    select account_descr, sum(actual) from trans
+        where in_account_id <> 5 and actual <> 0
+        group by account_descr
+        order by account_descr
+        ;
+    ```
+
+    What types of things have my accounts been charged for (and how much)?
+    (excluding XPACC)
+
+*   ```sql
+    select sum(actual) from trans where account_descr like 'NC IT Equip%' and actual <> 0 and in_account_id <> 5;
+    ```
+
+    How much have I spent on IT equipment? (not counting XPACC)
+
+*   ```sql
+    select sum(actual) from trans where (
+        account_descr like '%Trav%'
+        or account_descr like '%Reimb%'
+        or account_descr like '%Trvl%'
+        or account_descr like '%Veh%'
+        ) and account_descr not like '%Non-Emp%'
+        and in_account_id <> 5;
+    ```
+
+    How much have I spent on travel? (myself and students, excluding XPACC)
+
+*   ```sql
+    select sum(actual) from trans
+        where in_account_id <> 5 and actual <> 0
+        and account_descr like '%Fac%' and  account_descr like '%Adm%'
+        ;
+    ```
+
+    How much indirect cost have I paid to the university?  (excluding XPACC)
