@@ -15,8 +15,16 @@ Statements" function, for all my active accounts, since "the beginning of
 time". As far as I can tell, that includes the entire lifetime of
 [XPACC](https://xpacc.illinois.edu/).
 
+So you run
+```
+read-uiuc-fin-statement ~/Downloads/Custom_Statements.pdf.pdf  # (sic!)
+```
+and the information from the PDF will be added to the SQLite3 file. If you
+run the tool twice on the same file, you'll get duplicate entries, so don't do that.
+(I'd be happy to take a patch!)
+
 If you are lucky, at the end of the process you will be left with a SQLite3
-file containing the same information as the giant PDF. But you should not be
+file containing the same information as one or more giant PDFs. But you should not be
 confused: Despite being (hopefully) expedient, this is a hilarious, absurd
 process. Realize that this data already exists in a database somewhere! The tool
 generally tries to be somewhat careful and error out if it is confused, but if
@@ -36,7 +44,7 @@ or make no modifications. (Yay transactions.)
 Here are some queries I've found useful:
 
 *   What accounts do I have?
- 
+
     ```sql
     select * from account;
     ```
@@ -119,3 +127,51 @@ Here are some queries I've found useful:
         and account_descr like '%Fac%' and  account_descr like '%Adm%'
         ;
     ```
+
+*   For each account, compare 'revenue' with indirect costs:
+
+    ```sql
+    select
+      fund_descr,
+      case
+        when (account_descr like '%Fac%' and  account_descr like '%Adm%') then 'F&A'
+            else account_descr
+      end as trans_type,
+      sum(actual)
+    from trans inner join account on trans.in_account_id = account.id
+    where (
+            actual <> 0
+            and (
+                account_descr like '%Oper Rev%'
+                or trans_type == 'F&A'
+            ))
+    group by fund_descr,trans_type
+    ```
+
+*   Looking back over the last statement periods, show transactions above 100$ on a given account:
+
+    ```
+    select fy, period, date, account_descr, actual
+    from trans
+    where in_account_id = 3 and abs(actual) > 100
+    order by fy desc, period desc
+    ```
+
+*   Looking back over the last statement periods, show payroll items on a given account:
+
+    ```sql
+    select fy, period, name, pay_period_begin, account_descr, amount
+    from payroll
+    where in_account_id = 3
+    order by fy desc, period desc
+    ```
+
+*   Show a running total (vs date) of expenses on a given account. SQLiteBrowser has a handy function
+    that lets you graph this information.
+
+    ```sql
+    select id, account_descr, date, actual,  sum(actual) over (order by date, id) as running
+    from trans
+    where in_account_id = 2 and actual <> 0 and account_descr not like '%Revenue%'
+    order by date, id
+    ;
