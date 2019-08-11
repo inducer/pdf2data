@@ -35,11 +35,11 @@ or make no modifications. (Yay transactions.)
 
 Here are some queries I've found useful:
 
-*   ```sql
+*   What accounts do I have?
+ 
+    ```sql
     select * from account;
     ```
-
-    What accounts do I have?
 
 *   How much money have I spent on my startup/ICR account? (`2` is the account ID of my
     startup account.)
