@@ -150,7 +150,7 @@ Here are some queries I've found useful:
 
 *   Looking back over the last statement periods, show transactions above 100$ on a given account:
 
-    ```
+    ```sql
     select fy, period, date, account_descr, actual
     from trans
     where in_account_id = 3 and abs(actual) > 100
