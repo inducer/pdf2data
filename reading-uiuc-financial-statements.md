@@ -152,25 +152,7 @@ Here are some queries I've found useful:
     group by fund_descr,trans_type
     ```
 
-*   Looking back over the last statement periods, show transactions above 100$ on a given account:
-
-    ```sql
-    select fy, period, date, account_descr, actual
-    from trans
-    where in_account_id = 3 and abs(actual) > 100
-    order by fy desc, period desc
-    ```
-
-*   Looking back over the last statement periods, show payroll items on a given account:
-
-    ```sql
-    select fy, period, name, pay_period_begin, account_descr, amount
-    from payroll
-    where in_account_id = 3
-    order by fy desc, period desc
-    ```
-
-*   Show a running total (vs date) of expenses on a given account. SQLiteBrowser has a handy function
+*   Show a **running total** (vs date) of expenses on a given account. SQLiteBrowser has a handy function
     that lets you graph this information.
 
     ```sql
@@ -179,6 +161,25 @@ Here are some queries I've found useful:
     where in_account_id = 2 and actual <> 0 and account_descr not like '%Revenue%'
     order by date, id
     ;
+    ```
+
+*   Show **transactions that matter** (only 'actual', non-XPACC, above 50$),
+    cross-referenced with payroll, for a given statement period, across all
+    accounts.
+
+    ```
+    select trans.in_account_id, account.program_descr, account.fund_descr, trans.fy, trans.period, trans.date, trans.account_descr, trans.actual,
+      payroll.amount, name, payroll.pay_period_begin, payroll.pay_period_end
+    from trans left outer join payroll on
+        trans.in_account_id = payroll.in_account_id
+            and trans.fy = payroll.fy
+            and trans.period = payroll.period
+            and trans.account = payroll.account
+            and trans.actual = payroll.amount
+            inner join account on account.id = trans.in_account_id
+    where trans.in_account_id <> 5 and abs(actual) > 50  and trans.fy = 2020 and trans.period = 1
+    order by trans.fy desc, trans.period desc
+    ```
 
 If you find other useful queries, or if you have improvements to the tool, please fork this
 project and submit a pull request!
