@@ -1,2 +1,5 @@
 include README.rst
 include LICENSE
+include example/*.py
+include example/*.pdf
+include *.md
