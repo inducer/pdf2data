@@ -167,7 +167,7 @@ Here are some queries I've found useful:
     cross-referenced with payroll, for a given statement period, across all
     accounts.
 
-    ```
+    ```sql
     select trans.in_account_id, account.program_descr, account.fund_descr, trans.fy, trans.period, trans.date, trans.account_descr, trans.actual,
       payroll.amount, name, payroll.pay_period_begin, payroll.pay_period_end
     from trans left outer join payroll on
