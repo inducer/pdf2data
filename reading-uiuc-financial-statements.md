@@ -60,10 +60,14 @@ Here are some queries I've found useful:
     select sum(actual) from trans where in_account_id=2;
     ```
 
-*   How much money has arrived from a funding agency? (3 is an NSF grant account for me)
+*   How much money has arrived from funding agencies, broken down by
+    account? (allows comparison with grant budgets)
 
     ```sql
-    select sum(actual) from trans where in_account_id=3 and descr like '%Revenue%';
+    select in_account_id, organization_descr, fund_descr, account, sum(actual)
+    from trans inner join account on trans.in_account_id = account.id
+    where account = 303010
+    group by in_account_id;
     ```
 
 *   Who has been paid how much out of account X?
