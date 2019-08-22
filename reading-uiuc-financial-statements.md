@@ -53,7 +53,7 @@ Here are some queries I've found useful:
     select * from account;
     ```
 
-*   How much money have I spent on my startup/ICR account? (`2` is the account ID of my
+*   How much money have I spent on my startup account? (`2` is the account ID of my
     startup account.)
 
     ```sql
@@ -185,5 +185,27 @@ Here are some queries I've found useful:
     order by trans.fy desc, trans.period desc
     ```
 
-If you find other useful queries, or if you have improvements to the tool, please fork this
-project and submit a pull request!
+*   Broken down by financial year and account, compare 3% of expenses
+    with the amount of money received in ICR budget:
+    ```sql
+    select fy, in_account_id, fund_descr, round(sum(budget), 2), round(sum(actual), 2)*0.03
+    from trans
+      inner join account on trans.in_account_id = account.id
+    where (
+      account.organization = '434040' -- Rsrch Ext Fund-Govt  (Note: XPACC is different!)
+      and trans.account <> '303010' -- Exclude Grant Revenue
+      and actual <> 0
+      ) or (
+      account.organization = '434031' -- ICR-Faculty
+      and budget <> 0
+      )
+    group by fy, in_account_id;
+    ```
+
+If you
+
+* find anything wrong with the queries above, or
+* have other useful queries, or
+* if you have improvements to the tool,
+
+please email me or fork this project and submit a pull request!
