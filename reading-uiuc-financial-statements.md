@@ -168,7 +168,7 @@ Here are some queries I've found useful:
     ```
 
 *   Show **transactions that matter** (only 'actual', non-XPACC, above 50$),
-    cross-referenced with payroll, for a given statement period, across all
+    **cross-referenced with payroll**, for a given statement period, across all
     accounts.
 
     ```sql
@@ -186,7 +186,7 @@ Here are some queries I've found useful:
     ```
 
 *   Broken down by financial year and account, compare 3% of expenses
-    with the amount of money received in ICR budget:
+    with the **amount of money received in ICR** budget:
     ```sql
     select fy, in_account_id, fund_descr, round(sum(budget), 2), round(sum(actual), 2)*0.03
     from trans
