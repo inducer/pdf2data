@@ -15,8 +15,8 @@ It works around the (at least as far as I know) unavailability of bulk export
 of financial information from UI systems. It (currently) works for me with a
 1000-odd page PDF that comes out of the "Customize Combined Statements"
 function, for all my active accounts, since "the beginning of time". As far as
-I can tell, that includes the entire lifetime of
-[XPACC](https://xpacc.illinois.edu/), to give you an idea of robustness.
+I can tell, that includes the entire lifetime of a major research center, to give you an
+idea of robustness.
 
 So you run
 ```
@@ -99,23 +99,22 @@ Here are some queries I've found useful:
 
 
 *   What types of things have my accounts been charged for (and how much)?
-    (excluding XPACC)
 
     ```sql
     select account_descr, sum(actual) from trans
-        where in_account_id <> 5 and actual <> 0
+        where actual <> 0
         group by account_descr
         order by account_descr
         ;
     ```
 
-*   How much have I spent on IT equipment? (not counting XPACC)
+*   How much have I spent on IT equipment?
 
     ```sql
-    select sum(actual) from trans where account_descr like 'NC IT Equip%' and actual <> 0 and in_account_id <> 5;
+    select sum(actual) from trans where account_descr like 'NC IT Equip%' and actual <> 0;
     ```
 
-*   How much have I spent on travel? (myself and students, excluding XPACC)
+*   How much have I spent on travel? (myself and students)
 
     ```sql
     select sum(actual) from trans where (
@@ -124,14 +123,14 @@ Here are some queries I've found useful:
         or account_descr like '%Trvl%'
         or account_descr like '%Veh%'
         ) and account_descr not like '%Non-Emp%'
-        and in_account_id <> 5;
+        ;
     ```
 
-*   How much indirect cost have I paid to the university?  (excluding XPACC)
+*   How much indirect cost have I paid to the university?
 
     ```sql
     select sum(actual) from trans
-        where in_account_id <> 5 and actual <> 0
+        where actual <> 0
         and account_descr like '%Fac%' and  account_descr like '%Adm%'
         ;
     ```
@@ -167,7 +166,7 @@ Here are some queries I've found useful:
     ;
     ```
 
-*   Show **transactions that matter** (only 'actual', non-XPACC, above 50$),
+*   Show **transactions that matter** (only 'actual', above 50$),
     **cross-referenced with payroll**, for a given statement period, across all
     accounts.
 
@@ -192,7 +191,7 @@ Here are some queries I've found useful:
     from trans
       inner join account on trans.in_account_id = account.id
     where (
-      account.organization = '434040' -- Rsrch Ext Fund-Govt  (Note: XPACC is different!)
+      account.organization = '434040' -- Rsrch Ext Fund-Govt
       and trans.account <> '303010' -- Exclude Grant Revenue
       and actual <> 0
       ) or (
