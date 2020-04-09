@@ -436,8 +436,6 @@ def find_table(
             else:
                 row[key] = l
 
-        print(row)
-
     return rows
 
 
