@@ -339,12 +339,37 @@ def find_table(
     headers = sorted(headers, key=lambda l: getattr(l, col_min_attr_name))
     row_lookup = get_attr_lookup(lines, row_min_attr_name)
 
+    # {{{ filll col_boundary_estimates
+
+    col_boundary_estimates = []
+    for i in range(len(headers)-1):
+        hi = headers[i]
+        hip1 = headers[i+1]
+
+        ci = 0.5*(
+                getattr(hi, col_min_attr_name)
+                + getattr(hi, col_max_attr_name))
+
+        cip1 = 0.5*(
+                getattr(hip1, col_min_attr_name)
+                + getattr(hip1, col_max_attr_name))
+
+        col_boundary_estimates.append(0.5*(ci+cip1))
+
+    # }}}
+
     rows = []
     for row_lookup_key in sorted(row_lookup, reverse=reverse_sort):
         row_lines = row_lookup[row_lookup_key]
         row = {}
         rows.append(row)
         for l in row_lines:
+            if not l.text.strip():
+                # White space causes lots of grief for no reason: It's not
+                # visible in the PDF, so we're somewhat OK assuming it's
+                # insignificant.
+                continue
+
             lmin = getattr(l, col_min_attr_name)
             lmax = getattr(l, col_max_attr_name)
             assert lmin <= lmax
