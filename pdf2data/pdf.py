@@ -398,7 +398,13 @@ def find_table(
                                     getattr(h, col_min_attr_name)
                                     + getattr(h, col_max_attr_name))
                                 - lctr), h)
-                            for h in headers)
+                            for ihead, h in enumerate(headers)
+                            # If last column: never mind
+                            if ihead >= len(col_boundary_estimates)
+                            # If the left boundary of the entry is to the left
+                            # of this header's right column boundary.
+                            or lmin <= col_boundary_estimates[ihead]
+                            )
                     key = h.text
 
                 elif heading_bias == "min":
@@ -429,6 +435,8 @@ def find_table(
                 raise ValueError(f"duplicate assignment of key '{key}'")
             else:
                 row[key] = l
+
+        print(row)
 
     return rows
 
