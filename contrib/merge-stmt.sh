@@ -12,6 +12,14 @@ if test "$NEW_STMT" = ""; then
   exit 1
 fi
 
+STMT_DIR="$(dirname $NEW_STMT)"
+if [ "$STMT_DIR" != "source-data" ]; then
+  echo "### WARNING ###"
+  echo "It seems that $NEW_STMT has not been moved to the source-data folder."
+  echo "Hit Enter to continue anyway, or ^C to abort."
+  echo "### WARNING ###"
+  read ENTER
+fi
 STMT_BASE="$(basename $NEW_STMT)"
 STMT_BASE="${STMT_BASE%.pdf}"
 STMT_BASE="${STMT_BASE%.pdf}"
