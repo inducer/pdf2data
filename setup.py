@@ -19,6 +19,7 @@ setup(name="pdf2data",
           'Topic :: Utilities',
           ],
 
+      python_requires='~=3.6',
       install_requires=["pdfminer.six"],
 
       scripts=["read-uiuc-fin-statement"],
