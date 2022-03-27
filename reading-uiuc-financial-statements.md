@@ -70,6 +70,14 @@ Here are some queries I've found useful:
     group by in_account_id;
     ```
 
+*   What has been spent, broken down by account?
+
+    ```sql
+    select in_account_id, organization_descr, fund_descr, account, sum(actual)
+    from trans inner join account on trans.in_account_id = account.id
+    where account_descr not like '%Revenue%'
+    group by in_account_id;
+    ```
 *   Who has been paid how much out of account X?
 
     ```sql
@@ -181,7 +189,7 @@ Here are some queries I've found useful:
             and trans.actual = payroll.amount
             inner join account on account.id = trans.in_account_id
     where trans.in_account_id <> 5 and abs(actual) > 50  and trans.fy = 2020 and trans.period = 1
-    order by trans.fy desc, trans.period desc
+    order by trans.fy desc, trans.period desc, actual desc
     ```
 
 *   Broken down by financial year and account, compare 3% of expenses
