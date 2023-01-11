@@ -243,10 +243,10 @@ def find_lines_with(regex, lines):
     if isinstance(regex, str):
         regex = re.compile(regex)
     result = []
-    for l in lines:
-        match = regex.search(l.text)
+    for ln in lines:
+        match = regex.search(ln.text)
         if match is not None:
-            result.append((l, match))
+            result.append((ln, match))
     return result
 
 
@@ -264,8 +264,8 @@ def get_attr_lookup(lines, attr_name):
     coordinates.
     """
     result = {}
-    for l in lines:
-        result.setdefault(getattr(l, attr_name), []).append(l)
+    for ln in lines:
+        result.setdefault(getattr(ln, attr_name), []).append(ln)
     return result
 
 
@@ -294,8 +294,8 @@ def find_attr_group_matching(regexes, attr_name, lines):
             for attr_value, row_lines in attr_lookup.items()
             if all(
                 any(
-                    regex.search(l.text) is not None
-                    for l in row_lines)
+                    regex.search(ln.text) is not None
+                    for ln in row_lines)
                 for regex in regexes)]
 
     if len(result) < 1:
@@ -346,7 +346,7 @@ def find_table(
         headers, lines, row_min_attr_name, row_max_attr_name,
         col_min_attr_name, col_max_attr_name,
         reverse_sort, heading_bias="centered"):
-    headers = sorted(headers, key=lambda l: getattr(l, col_min_attr_name))
+    headers = sorted(headers, key=lambda ln: getattr(ln, col_min_attr_name))
     row_lookup = get_attr_lookup(lines, row_min_attr_name)
 
     # {{{ filll col_boundary_estimates
@@ -373,15 +373,15 @@ def find_table(
         row_lines = row_lookup[row_lookup_key]
         row = {}
         rows.append(row)
-        for l in row_lines:
-            if not l.text.strip():
+        for ln in row_lines:
+            if not ln.text.strip():
                 # White space causes lots of grief for no reason: It's not
                 # visible in the PDF, so we're somewhat OK assuming it's
                 # insignificant.
                 continue
 
-            lmin = getattr(l, col_min_attr_name)
-            lmax = getattr(l, col_max_attr_name)
+            lmin = getattr(ln, col_min_attr_name)
+            lmax = getattr(ln, col_max_attr_name)
             assert lmin <= lmax
 
             lctr = (lmin+lmax)*0.5
@@ -444,7 +444,7 @@ def find_table(
             if key in row:
                 raise ValueError(f"duplicate assignment of key '{key}'")
             else:
-                row[key] = l
+                row[key] = ln
 
     return rows
 
