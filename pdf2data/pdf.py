@@ -161,7 +161,17 @@ def gather_text(item, lines=None):
     if lines is None:
         lines = []
 
-    if isinstance(item, LTTextBoxHorizontal):
+    if isinstance(item, LTChar):
+        lines.append(TextLine(
+            text="".join(item._text),
+            fontname=item.fontname,
+            bbox=item.bbox))
+
+    elif isinstance(item, LTAnno):
+        # Assert that nothing useful is here.
+        assert not item._text.strip(), item._text
+
+    elif isinstance(item, LTTextBoxHorizontal):
         for line in item:
             assert isinstance(line, LTTextLineHorizontal)
 
