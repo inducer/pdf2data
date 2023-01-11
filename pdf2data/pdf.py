@@ -59,13 +59,11 @@ import re
 from functools import partial
 
 from pdfminer.converter import PDFPageAggregator
-from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
-from pdfminer.pdfpage import PDFPage
 from pdfminer.layout import (
-        LAParams,
-        LTContainer,
-        LTTextBoxHorizontal, LTTextLineHorizontal, LTChar, LTAnno,
-        LTRect, LTLine)
+    LAParams, LTAnno, LTChar, LTContainer, LTLine, LTRect, LTTextBoxHorizontal,
+    LTTextLineHorizontal)
+from pdfminer.pdfinterp import PDFPageInterpreter, PDFResourceManager
+from pdfminer.pdfpage import PDFPage
 
 
 # {{{ pdf page iterator
