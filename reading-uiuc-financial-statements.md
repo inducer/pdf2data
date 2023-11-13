@@ -78,10 +78,11 @@ Here are some queries I've found useful:
     where account_descr not like '%Revenue%'
     group by in_account_id;
     ```
-*   Who has been paid how much out of account X?
+*   Who has been paid how much out of account X, and between which dates?
 
     ```sql
-    select name, sum(amount) from payroll where in_account_id=2 group by name order by name;
+    select name, sum(amount), min(pay_period_begin) as first_paid, max(pay_period_begin) as last_paid
+    from payroll where in_account_id=10 group by name order by last_paid;
     ```
 
 *   Who has been paid how much out of account X?
