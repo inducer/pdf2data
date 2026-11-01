@@ -1,25 +1,26 @@
 #!/usr/bin/env python3
 # -*- coding: latin1 -*-
 
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
+
 
 setup(name="pdf2data",
       version="2019.1",
       description=(
           "Tools for extracting tabular data from PDFs, using pdfminer"),
-      long_description=open("README.rst", "r").read(),
+      long_description=open("README.rst").read(),
       classifiers=[
-          'Development Status :: 4 - Beta',
-          'Intended Audience :: Developers',
-          'Intended Audience :: Other Audience',
-          'Intended Audience :: Science/Research',
-          'License :: OSI Approved :: MIT License',
-          'Natural Language :: English',
-          'Programming Language :: Python :: 3',
-          'Topic :: Utilities',
+          "Development Status :: 4 - Beta",
+          "Intended Audience :: Developers",
+          "Intended Audience :: Other Audience",
+          "Intended Audience :: Science/Research",
+          "License :: OSI Approved :: MIT License",
+          "Natural Language :: English",
+          "Programming Language :: Python :: 3",
+          "Topic :: Utilities",
           ],
 
-      python_requires='~=3.6',
+      python_requires="~=3.10",
       install_requires=["pdfminer.six"],
 
       scripts=["read-uiuc-fin-statement"],
